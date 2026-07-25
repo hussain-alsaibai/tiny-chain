@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tiny-chain"
+version = "0.1.0"
+description = "Streaming LLM processor with retries, fallbacks, function calling, and JSON extraction. Zero dependencies."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [
+    { name = "hussain-alsaibai", email = "hussain.alsaibai@gmail.com" },
+]
+keywords = ["llm", "openai", "streaming", "ai", "gpt", "claude"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.optional-dependencies]
+test = []
+
+[project.urls]
+Homepage = "https://github.com/hussain-alsaibai/tiny-chain"
+Repository = "https://github.com/hussain-alsaibai/tiny-chain"
+"Bug Tracker" = "https://github.com/hussain-alsaibai/tiny-chain/issues"
+
+[project.scripts]
+tiny-chain = "tiny_chain:main"
+
+[tool.setuptools]
+py-modules = ["tiny_chain"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["tiny_chain*"]
