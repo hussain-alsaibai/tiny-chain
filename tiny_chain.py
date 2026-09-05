@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, Iterator, List, Optional, TypeVar
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __all__ = ["TinyChain", "ChainStep", "ChainSnapshot"]
 
 T = TypeVar("T")
@@ -365,3 +365,169 @@ class TinyChain:
 
     def __repr__(self) -> str:
         return self.summary()
+
+
+# ─────────────────────────────────────────────────────────────
+# Branching Chain — Parallel Reasoning Paths
+# ─────────────────────────────────────────────────────────────
+
+class BranchingChain:
+    """
+    Chain-of-thought with branching for parallel reasoning paths.
+
+    Use when an agent needs to explore multiple hypotheses simultaneously,
+    then merge or select the best branch.
+
+    Example:
+        bc = BranchingChain("code-review")
+
+        with bc.branch("security") as sec:
+            sec.add_step("Check auth", "Looking for auth bypass vectors")
+            sec.add_step("Check injection", "Scanning for SQL/NoSQL injection")
+
+        with bc.branch("performance") as perf:
+            perf.add_step("Check queries", "Looking for N+1 queries")
+            perf.add_step("Check indexes", "Scanning for missing indexes")
+
+        results = bc.run_all()  # [{branch: 'security', steps: [...]}]
+    """
+
+    def __init__(
+        self,
+        name: str = "default",
+        *,
+        tags: Optional[list[str]] = None,
+        metadata: Optional[dict[str, Any]] = None,
+        max_concurrent: int = 10,
+    ):
+        self.id = str(uuid.uuid4())
+        self.name = name
+        self.tags: list[str] = tags or []
+        self.metadata: dict[str, Any] = metadata or {}
+        self._branches: dict[str, TinyChain] = {}
+        self._active_branch: Optional[str] = None
+        self._start_time = time.time()
+        self._max_concurrent = max_concurrent
+
+    def branch(self, name: str) -> "BranchContext":
+        """Start a new reasoning branch. Use as context manager."""
+        self._branches[name] = TinyChain(
+            name=f"{self.name}/{name}",
+            tags=self.tags + ["branch", name],
+            metadata=self.metadata.copy(),
+        )
+        self._active_branch = name
+        return BranchContext(self, name)
+
+    def get_branch(self, name: str) -> Optional[TinyChain]:
+        return self._branches.get(name)
+
+    def branch_names(self) -> list[str]:
+        return list(self._branches.keys())
+
+    def run_all(self) -> list[dict[str, Any]]:
+        """Return results from all branches, sorted by total steps desc."""
+        results = []
+        for name, chain in self._branches.items():
+            results.append({
+                "branch": name,
+                "steps": len(chain.steps),
+                "duration_ms": chain.total_duration_ms,
+                "errors": len(chain.errors()),
+                "chain": chain,
+            })
+        return sorted(results, key=lambda x: x["steps"], reverse=True)
+
+    def best_branch(self) -> Optional[str]:
+        """Return the branch name with the most steps (simple heuristic)."""
+        results = self.run_all()
+        return results[0]["branch"] if results else None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "version": __version__,
+            "tags": self.tags,
+            "metadata": self.metadata,
+            "total_duration_ms": (time.time() - self._start_time) * 1000,
+            "branches": {
+                name: chain.to_dict()
+                for name, chain in self._branches.items()
+            },
+            "branch_count": len(self._branches),
+            "best_branch": self.best_branch(),
+        }
+
+    def to_json(self, indent: int = 2) -> str:
+        return json.dumps(self.to_dict(), indent=indent)
+
+    def export(self, path: str) -> None:
+        with open(path, "w") as f:
+            f.write(self.to_json())
+
+    def summary(self) -> str:
+        branches = len(self._branches)
+        total_steps = sum(len(c.steps) for c in self._branches.values())
+        total_ms = sum(c.total_duration_ms for c in self._branches.values())
+        err = sum(len(c.errors()) for c in self._branches.values())
+        err_str = f" ({err} errors)" if err else ""
+        return (
+            f"BranchingChain({self.name}): {branches} branches, "
+            f"{total_steps} total steps, {total_ms:.0f}ms{err_str}"
+        )
+
+    def __repr__(self) -> str:
+        return self.summary()
+
+
+class BranchContext:
+    """Context manager for a reasoning branch."""
+
+    def __init__(self, parent: BranchingChain, name: str):
+        self._parent = parent
+        self._name = name
+
+    def __enter__(self) -> TinyChain:
+        return self._parent._branches[self._name]
+
+    def __exit__(self, *_: Any) -> None:
+        self._parent._active_branch = None
+
+
+# ─────────────────────────────────────────────────────────────
+# Trace Comparison — Compare two chain traces
+# ─────────────────────────────────────────────────────────────
+
+def compare_chains(a: TinyChain, b: TinyChain) -> dict[str, Any]:
+    """
+    Compare two chain traces. Useful for evaluating agent improvements.
+
+    Returns diff of step counts, duration, errors, and step-by-step comparison.
+    """
+    return {
+        "a_id": a.id[:8],
+        "b_id": b.id[:8],
+        "a_name": a.name,
+        "b_name": b.name,
+        "a_steps": len(a.steps),
+        "b_steps": len(b.steps),
+        "step_diff": len(b.steps) - len(a.steps),
+        "a_duration_ms": round(a.total_duration_ms, 1),
+        "b_duration_ms": round(b.total_duration_ms, 1),
+        "duration_diff_ms": round(b.total_duration_ms - a.total_duration_ms, 1),
+        "a_errors": len(a.errors()),
+        "b_errors": len(b.errors()),
+        "error_diff": len(b.errors()) - len(a.errors()),
+        "step_comparison": [
+            {
+                "a_name": a.steps[i].name if i < len(a.steps) else None,
+                "b_name": b.steps[i].name if i < len(b.steps) else None,
+                "match": (
+                    a.steps[i].name == b.steps[i].name
+                    if i < len(a.steps) and i < len(b.steps) else False
+                ),
+            }
+            for i in range(max(len(a.steps), len(b.steps)))
+        ],
+    }
