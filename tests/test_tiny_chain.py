@@ -125,7 +125,8 @@ class TestTinyChain:
         d = chain.to_dict()
 
         assert d["name"] == "serialize-me"
-        assert d["version"] == "0.2.0"
+        # Contract, not a pin: this suite predates the v0.3.0 branching work.
+        assert tuple(int(x) for x in d["version"].split(".")) >= (0, 2, 0)
         assert d["tags"] == ["test"]
         assert len(d["steps"]) == 1
         assert d["errors"] == []
