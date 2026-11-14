@@ -17,7 +17,8 @@ Most agents print thoughts to the console or hide them in logs. `tiny-chain` mak
 Single file. No dependencies.
 
 ```bash
-pip install tiny-chain
+# From GitHub (recommended -- not yet on PyPI)
+pip install git+https://github.com/hussain-alsaibai/tiny-chain.git
 ```
 
 ## Quickstart
